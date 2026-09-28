@@ -55,12 +55,24 @@ public class CustomerTicketService {
             orders.getOwnedOrder(actor.getUserId(), orderId);
         }
         String id = UUID.randomUUID().toString();
-        String sanitized = sanitize(reason);
-        String summary = "用户请求人工处理：" + sanitized;
+        List<String> recent = db.queryForList(
+                "SELECT content FROM customer_message WHERE conversation_id=? AND role='user' " +
+                        "ORDER BY created_at DESC,id DESC LIMIT 3", String.class, conversationId);
+        StringBuilder summary = new StringBuilder("用户请求人工处理；近期对话主题：");
+        String context = String.join(" ", recent) + " " + reason;
+        List<String> topics = new java.util.ArrayList<>();
+        if (context.matches("(?s).*(配送|物流|发货|快递|运费).*")) topics.add("配送物流");
+        if (context.matches("(?s).*(订单|下单|购买).*")) topics.add("订单查询");
+        if (context.matches("(?s).*(退货|退款|换货|售后).*")) topics.add("售后咨询");
+        if (context.matches("(?s).*(商品|价格|库存|规格).*")) topics.add("商品咨询");
+        if (context.matches("(?s).*(支付|付款).*")) topics.add("支付咨询");
+        summary.append(topics.isEmpty() ? "一般咨询" : String.join("、", topics));
+        if (orderId != null) summary.append("；关联订单 ").append(orderId);
         try {
             db.update("INSERT INTO customer_ticket(id,conversation_id,user_id,order_id,status,reason,summary,idempotency_key) " +
                             "VALUES(?,?,?,?,'QUEUED',?,?,?)",
-                    id, conversationId, actor.getUserId(), orderId, sanitized, summary, idempotencyKey);
+                    id, conversationId, actor.getUserId(), orderId, summary.toString(),
+                    summary.toString(), idempotencyKey);
         } catch (DuplicateKeyException race) {
             List<Map<String, Object>> winner = db.queryForList(
                     "SELECT id,status,order_id,summary,created_at FROM customer_ticket WHERE conversation_id=? AND idempotency_key=?",
@@ -100,10 +112,4 @@ public class CustomerTicketService {
         return ticket;
     }
 
-    static String sanitize(String value) {
-        return value.replaceAll("地址\\s*[:：]\\s*[^，,。]*", "地址[已省略]")
-                .replaceAll("(?i)(token|password|密码)\\s*[:=：]\\s*[^\\s，,。]+", "$1=[已省略]")
-                .replaceAll("(?<!\\d)1[3-9]\\d{9}(?!\\d)", "[手机号已省略]")
-                .replaceAll("(?<!\\d)\\d{6,}(?!\\d)", "[数字已省略]");
-    }
 }

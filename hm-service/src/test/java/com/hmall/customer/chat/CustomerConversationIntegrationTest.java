@@ -40,4 +40,16 @@ class CustomerConversationIntegrationTest {
         assertTrue(conversations.events(id, owner, eventId).isEmpty());
         assertEquals(2, ((java.util.List<?>) conversations.history(id, owner).get("messages")).size());
     }
+
+    @Test
+    void sources_and_ticket_events_are_persisted_before_completion() {
+        String id = (String) conversations.create(new CustomerActor(1L, null)).get("conversationId");
+        CustomerActor actor = new CustomerActor(1L, null);
+        String runId = (String) conversations.submit(id, actor, "退货规则", "event-key").get("runId");
+        conversations.appendEvent(runId, 1, "sources", "[{\"policyId\":5}]");
+        conversations.appendEvent(runId, 2, "ticket", "{\"ticketId\":\"ticket-1\",\"status\":\"QUEUED\"}");
+        conversations.appendEvent(runId, 3, "completed", "已创建排队工单");
+        assertEquals(3, conversations.events(id, actor, 0).size());
+        assertEquals(3, ((java.util.List<?>) conversations.history(id, actor).get("events")).size());
+    }
 }

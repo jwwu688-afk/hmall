@@ -113,6 +113,10 @@ public class CustomerConversationService {
     public long appendEvent(String runId, int sequence, String type, String data) {
         List<Map<String, Object>> run = db.queryForList("SELECT status FROM customer_run WHERE id=? FOR UPDATE", runId);
         if (run.isEmpty()) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "运行不存在");
+        // 同一会话的并行运行必须按提交顺序分配全局事件 ID，避免 SSE 游标跳过迟交事件。
+        String conversationId = db.queryForObject(
+                "SELECT conversation_id FROM customer_run WHERE id=?", String.class, runId);
+        db.queryForObject("SELECT id FROM customer_conversation WHERE id=? FOR UPDATE", String.class, conversationId);
         List<Map<String, Object>> duplicate = db.queryForList(
                 "SELECT id FROM customer_event WHERE run_id=? AND sequence_no=?", runId, sequence);
         if (!duplicate.isEmpty()) return ((Number) duplicate.get(0).get("id")).longValue();
@@ -122,15 +126,13 @@ public class CustomerConversationService {
                 Integer.class, runId);
         try { requireNextSequence(last == null ? 0 : last, sequence); }
         catch (IllegalArgumentException e) { throw new ResponseStatusException(HttpStatus.CONFLICT, e.getMessage()); }
-        if (!List.of("answer", "completed", "error").contains(type) || data == null || data.length() > 20000)
+        if (!List.of("answer", "sources", "ticket", "completed", "error").contains(type) || data == null || data.length() > 20000)
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "事件无效");
         db.update("INSERT INTO customer_event(run_id,sequence_no,event_type,data) VALUES(?,?,?,?)",
                 runId, sequence, type, data);
         Long id = db.queryForObject("SELECT id FROM customer_event WHERE run_id=? AND sequence_no=?",
                 Long.class, runId, sequence);
         if ("completed".equals(type)) {
-            List<Map<String, Object>> conversation = db.queryForList("SELECT conversation_id FROM customer_run WHERE id=?", runId);
-            String conversationId = (String) conversation.get(0).get("conversation_id");
             db.update("INSERT INTO customer_message(id,conversation_id,role,content,run_id) VALUES(?,?,'assistant',?,?)",
                     UUID.randomUUID().toString(), conversationId, data, runId);
             db.update("UPDATE customer_run SET status='COMPLETED',updated_at=NOW(6) WHERE id=?", runId);
@@ -151,8 +153,12 @@ public class CustomerConversationService {
         Map<String, Object> result = new HashMap<>();
         result.put("conversationId", conversationId);
         result.put("messages", db.queryForList(
-                "SELECT id,role,content,run_id AS runId,created_at AS createdAt FROM customer_message WHERE conversation_id=? ORDER BY created_at,id LIMIT 200",
+                "SELECT id,role,content,run_id AS runId,created_at AS createdAt FROM customer_message WHERE conversation_id=? ORDER BY created_at DESC,id DESC LIMIT 200",
                 conversationId));
+        result.put("events", db.queryForList(
+                "SELECT e.id,e.run_id AS runId,e.sequence_no AS sequence,e.event_type AS type,e.data " +
+                        "FROM customer_event e JOIN customer_run r ON r.id=e.run_id WHERE r.conversation_id=? " +
+                        "ORDER BY e.id DESC LIMIT 200", conversationId));
         return result;
     }
 

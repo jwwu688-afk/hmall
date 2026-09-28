@@ -22,15 +22,18 @@ def tool_names_for_request(authenticated: bool) -> tuple[str, ...]:
 
 
 def build_agent(model, java_client, authenticated: bool, message: str, checkpointer=None,
-                conversation_id: str | None = None, run_id: str | None = None):
+                conversation_id: str | None = None, run_id: str | None = None,
+                source_collector: list[dict] | None = None,
+                ticket_collector: list[dict] | None = None,
+                fact_collector: list[dict] | None = None):
     # message 只会作为调用时的用户输入，绝不参与工具授权或主体选择。
-    tools = make_tools(java_client, authenticated)
+    tools = make_tools(java_client, authenticated, fact_collector)
     catalog_tools = tools[:2]
     order_tools = tools[2:]
-    policy_tool = make_policy_tool(java_client)
+    policy_tool = make_policy_tool(java_client, source_collector)
     tools.append(policy_tool)
     if conversation_id and run_id:
-        ticket_tool = make_ticket_tool(java_client, conversation_id, run_id)
+        ticket_tool = make_ticket_tool(java_client, conversation_id, run_id, ticket_collector)
         tools.append(ticket_tool)
     subagents = [{
         "name": "catalog_specialist",

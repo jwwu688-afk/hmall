@@ -5,14 +5,28 @@
   const sendButton = document.getElementById('send-button');
   const notice = document.getElementById('notice');
   const status = document.getElementById('connection-status');
+  const ticketPanel = document.getElementById('ticket-panel');
+  const handoffButton = document.getElementById('handoff-button');
   const userToken = sessionStorage.getItem('token');
-  const scope = userToken ? `account:${userToken.slice(-20)}` : 'guest';
+  function accountScope(token) {
+    if (!token) return 'guest';
+    try {
+      const part = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+      const userId = JSON.parse(atob(part)).user;
+      if (/^\d+$/.test(String(userId))) return `account:${userId}`;
+    } catch (_) { /* 无法解码的令牌仍由服务端拒绝。 */ }
+    return `unknown-token:${token.slice(-20)}`;
+  }
+  const scope = accountScope(userToken);
   const storageKey = `customer-service:${scope}`;
   let session = JSON.parse(sessionStorage.getItem(storageKey) || 'null');
   let controller = null;
   let stopped = false;
   let pending = null;
+  let handoffPending = null;
   const seenRunIds = new Set();
+  const answerRows = new Map();
+  const sourceByRun = new Map();
 
   const headers = (json = false) => {
     const result = {};
@@ -25,7 +39,7 @@
   function save() { sessionStorage.setItem(storageKey, JSON.stringify(session)); }
 
   function message(role, text, runId) {
-    if (runId && seenRunIds.has(runId)) return;
+    if (runId && seenRunIds.has(runId)) return answerRows.get(runId);
     if (runId) seenRunIds.add(runId);
     const row = document.createElement('div');
     row.className = `message ${role === 'user' ? 'user' : 'assistant'}`;
@@ -37,7 +51,47 @@
     body.textContent = text;
     row.append(label, body);
     messages.appendChild(row);
+    if (runId) {
+      answerRows.set(runId, row);
+      const sources = sourceByRun.get(runId);
+      if (sources) renderSources(runId, sources);
+    }
     messages.scrollTop = messages.scrollHeight;
+    return row;
+  }
+
+  function renderSources(runId, sources) {
+    if (!Array.isArray(sources) || !sources.length) return;
+    sourceByRun.set(runId, sources);
+    const row = answerRows.get(runId);
+    if (!row) return;
+    const previous = row.querySelector('.source-list');
+    if (previous) previous.remove();
+    const list = document.createElement('div');
+    list.className = 'source-list';
+    for (const source of sources) {
+      const card = document.createElement('div');
+      card.className = 'source-card';
+      const title = document.createElement('strong');
+      title.textContent = source.title || '已发布规则';
+      const meta = document.createElement('span');
+      meta.textContent = `政策 ${source.policyId} · 第 ${source.version} 版 · 生效于 ${source.effectiveFrom}`;
+      card.append(title, meta);
+      list.append(card);
+    }
+    row.append(list);
+  }
+
+  function showTicket(ticket) {
+    if (!ticket || !ticket.ticketId || !ticket.status) return;
+    ticketPanel.replaceChildren();
+    const title = document.createElement('strong');
+    title.textContent = ticket.status === 'QUEUED' ? '人工工单已排队' : '人工工单状态';
+    const detail = document.createElement('span');
+    const statusText = { QUEUED: '排队中', IN_PROGRESS: '处理中', RESOLVED: '已解决' }[ticket.status] || '处理中';
+    detail.textContent = `编号 ${ticket.ticketId} · ${statusText}。人工客服会在后续处理。`;
+    ticketPanel.append(title, detail);
+    ticketPanel.hidden = false;
   }
 
   function showNotice(text, login = false) {
@@ -68,14 +122,34 @@
     }
     const history = await request(`/conversations/${encodeURIComponent(session.conversationId)}`);
     messages.replaceChildren();
-    for (const item of history.messages || []) message(item.role, item.content, item.role === 'assistant' ? item.runId : null);
+    seenRunIds.clear();
+    answerRows.clear();
+    sourceByRun.clear();
+    for (const item of (history.messages || []).slice().reverse())
+      message(item.role, item.content, item.role === 'assistant' ? item.runId : null);
     if (!history.messages || history.messages.length === 0) message('assistant', '你好！可以问我在售商品、你的订单和已有物流信息。');
+    let lastError = null;
+    for (const event of (history.events || []).slice().reverse()) {
+      try {
+        if (event.type === 'sources') renderSources(event.runId, JSON.parse(event.data));
+        if (event.type === 'ticket') showTicket(JSON.parse(event.data));
+        if (event.type === 'error') lastError = event.data;
+        if (event.type === 'completed') lastError = null;
+      } catch (_) { /* 忽略单条损坏的历史事件，继续恢复其他消息。 */ }
+      session.lastEventId = Math.max(session.lastEventId || 0, Number(event.id));
+    }
+    if (lastError) showNotice(lastError);
+    save();
+    try { showTicket(await request(`/conversations/${encodeURIComponent(session.conversationId)}/ticket`)); }
+    catch (_) { /* 没有工单是正常状态。 */ }
   }
 
   function onEvent(eventId, event) {
     if (!eventId || eventId <= (session.lastEventId || 0)) return;
     session.lastEventId = eventId;
     save();
+    if (event.type === 'sources') renderSources(event.runId, JSON.parse(event.data));
+    if (event.type === 'ticket') showTicket(JSON.parse(event.data));
     if (event.type === 'completed') message('assistant', event.data, event.runId);
     if (event.type === 'error') showNotice(event.data || '客服服务暂时不可用，请稍后重试。');
   }
@@ -117,7 +191,7 @@
     event.preventDefault();
     const text = input.value.trim();
     if (!text || !session) return;
-    if (!userToken && /(订单|物流|发货|快递|退款|退货)/.test(text)) {
+    if (!userToken && /(订单|物流|快递单号)/.test(text)) {
       showNotice('查询订单或物流信息需要先登录。', true);
       return;
     }
@@ -135,6 +209,26 @@
       showNotice('消息暂时没有发送成功，请重试。');
     } finally {
       sendButton.disabled = false;
+    }
+  });
+
+  handoffButton.addEventListener('click', async () => {
+    if (!session) { showNotice('会话尚未连接，请稍后重试。'); return; }
+    const reason = input.value.trim() || '希望人工客服协助处理问题';
+    if (!handoffPending || handoffPending.reason !== reason)
+      handoffPending = { reason, idempotencyKey: crypto.randomUUID() };
+    handoffButton.disabled = true;
+    notice.hidden = true;
+    try {
+      const ticket = await request(`/conversations/${encodeURIComponent(session.conversationId)}/handoff`,
+        { method: 'POST', body: JSON.stringify(handoffPending) });
+      if (!ticket.ticketId || ticket.status !== 'QUEUED') throw new Error('没有工单编号');
+      showTicket(ticket);
+      handoffPending = null;
+    } catch (_) {
+      showNotice('人工工单未创建成功，请点击“转人工”重试。');
+    } finally {
+      handoffButton.disabled = false;
     }
   });
 

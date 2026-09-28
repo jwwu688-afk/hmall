@@ -57,11 +57,15 @@ class CustomerTicketServiceTest {
     @Test
     void summary_redacts_phone_address_and_token() {
         String id = (String) conversations.create(new CustomerActor(1L, null)).get("conversationId");
+        conversations.submit(id, new CustomerActor(1L, null),
+                "我的收货地址是北京市海淀区知春路1号，配送没有更新，手机13800138000", "context-key");
         CustomerTicket ticket = tickets.create(id, new CustomerActor(1L, null),
                 "地址：北京市海淀区某街道，手机 13800138000，token=secret123，请帮我咨询配送", null, "one");
         assertFalse(ticket.getSummary().contains("13800138000"));
         assertFalse(ticket.getSummary().contains("北京市海淀区"));
         assertFalse(ticket.getSummary().contains("secret123"));
         assertTrue(ticket.getSummary().contains("配送"));
+        assertTrue(ticket.getSummary().contains("近期对话"));
+        assertFalse(ticket.getSummary().contains("知春路"));
     }
 }
