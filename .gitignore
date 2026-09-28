@@ -1,0 +1,9 @@
+.idea/
+**/target/
+logs/
+*.log
+
+# Local credentials and signing key
+hm-service/src/main/resources/application-dev.yaml
+hm-service/src/main/resources/application-local.yaml
+hm-service/src/main/resources/hmall.jks
