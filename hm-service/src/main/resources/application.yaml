@@ -48,9 +48,12 @@ hm:
     alias: hmall
     password: ${HM_JWT_PASSWORD}
     tokenTTL: 30m
+  agent:
+    token-secret: ${HM_AGENT_TOKEN_SECRET}
   auth:
     excludePaths:
       - /search/**
       - /users/login
       - /items/**
       - /hi
+      - /internal/customer/**
