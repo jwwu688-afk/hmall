@@ -16,7 +16,7 @@ def tool_names_for_request(authenticated: bool) -> tuple[str, ...]:
     return public + (("list_my_orders", "get_my_order", "get_my_logistics") if authenticated else ())
 
 
-def build_agent(model, java_client, authenticated: bool, message: str):
+def build_agent(model, java_client, authenticated: bool, message: str, checkpointer=None):
     # message 只会作为调用时的用户输入，绝不参与工具授权或主体选择。
     tools = make_tools(java_client, authenticated)
     catalog_tools = tools[:2]
@@ -38,5 +38,6 @@ def build_agent(model, java_client, authenticated: bool, message: str):
         tools=tools,
         subagents=subagents,
         system_prompt=PROMPT,
+        checkpointer=checkpointer,
         permissions=[FilesystemPermission(operations=["read", "write"], paths=["/**"], mode="deny")],
     )

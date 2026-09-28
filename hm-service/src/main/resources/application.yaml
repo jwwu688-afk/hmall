@@ -5,6 +5,9 @@ spring:
     name: hm-service
   profiles:
     active: dev
+  flyway:
+    baseline-on-migrate: true
+    baseline-version: 0
   datasource:
     url: jdbc:mysql://${hm.db.host}:3306/hmall?useUnicode=true&characterEncoding=UTF-8&autoReconnect=true&serverTimezone=Asia/Shanghai
     driver-class-name: com.mysql.cj.jdbc.Driver
@@ -50,6 +53,8 @@ hm:
     tokenTTL: 30m
   agent:
     token-secret: ${HM_AGENT_TOKEN_SECRET}
+    service-secret: ${HM_AGENT_SERVICE_SECRET}
+    url: ${HM_AGENT_URL:http://127.0.0.1:8001}
   auth:
     excludePaths:
       - /search/**
@@ -57,3 +62,5 @@ hm:
       - /items/**
       - /hi
       - /internal/customer/**
+      - /internal/customer-service/**
+      - /customer-service/**
