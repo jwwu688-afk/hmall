@@ -60,6 +60,13 @@ class JavaClient:
                              logistics_number=row.get("logisticsNumber"),
                              consign_time=row.get("consignTime"))
 
+    def search_policies(self, query: str, category: str | None = None) -> list[dict]:
+        rows = self._get("/policies", {"query": query, "category": category}) or []
+        return [{"policyId": row["policyId"], "version": row["version"],
+                 "title": row["title"], "effectiveFrom": row["effectiveFrom"],
+                 "category": row["category"], "excerpt": row["excerpt"]}
+                for row in rows[:5]]
+
     @staticmethod
     def _item(row: dict) -> ItemCard:
         return ItemCard(id=row["id"], name=row["name"], price=row["price"],
