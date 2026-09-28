@@ -51,7 +51,7 @@ public class CustomerConversationController {
         String text = request.get("message");
         Map<String, Object> result = conversations.submit(id, actor, text, request.get("idempotencyKey"));
         if (Boolean.TRUE.equals(result.get("newRun"))) {
-            Set<String> scopes = actor.authenticated() ? Set.of("catalog:read", "policy:read", "order:read") : Set.of("catalog:read", "policy:read");
+            Set<String> scopes = actor.authenticated() ? Set.of("catalog:read", "policy:read", "order:read", "ticket:create") : Set.of("catalog:read", "policy:read", "ticket:create");
             String runId = (String) result.get("runId");
             String token = delegationTokens.issue(actor.getUserId(), scopes, id, runId);
             agentClient.dispatch(id, runId, text, token);

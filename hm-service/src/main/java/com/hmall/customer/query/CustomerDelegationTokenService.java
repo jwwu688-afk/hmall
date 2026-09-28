@@ -48,6 +48,12 @@ public class CustomerDelegationTokenService {
     }
 
     public Long verify(String authorization, String requiredScope) {
+        Map<String, Object> claims = verifyClaims(authorization, requiredScope);
+        Object subject = claims.get("sub");
+        return subject == null ? null : Long.valueOf(subject.toString());
+    }
+
+    public Map<String, Object> verifyClaims(String authorization, String requiredScope) {
         try {
             if (authorization == null || !authorization.startsWith("Bearer ")) throw new IllegalArgumentException();
             String[] parts = authorization.substring(7).split("\\.", -1);
@@ -62,7 +68,7 @@ public class CustomerDelegationTokenService {
             if (!(scopes instanceof java.util.List) || !((java.util.List<?>) scopes).contains(requiredScope)) throw new IllegalArgumentException();
             Object subject = claims.get("sub");
             if ("order:read".equals(requiredScope) && subject == null) throw new IllegalArgumentException();
-            return subject == null ? null : Long.valueOf(subject.toString());
+            return claims;
         } catch (Exception e) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "内部令牌无效或权限不足");
         }

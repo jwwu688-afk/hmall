@@ -73,11 +73,14 @@ def _invoke(request: RunRequest) -> str:
                        base_url=os.environ.get("HM_AGENT_MODEL_BASE_URL") or None,
                        temperature=0.1)
     authenticated = "order:read" in _verified_scopes(request.delegationToken)
-    java = JavaClient(os.environ.get("HM_JAVA_BASE_URL", "http://127.0.0.1:8080"), request.delegationToken)
+    java = JavaClient(os.environ.get("HM_JAVA_BASE_URL", "http://127.0.0.1:8080"),
+                      request.delegationToken,
+                      service_secret=os.environ.get("HM_AGENT_SERVICE_SECRET", ""))
     checkpoint_path = Path(os.environ.get("HM_AGENT_CHECKPOINT_DB", "data/customer-agent-checkpoints.sqlite3"))
     checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
     with SqliteSaver.from_conn_string(str(checkpoint_path)) as saver:
-        agent = build_agent(model, java, authenticated, request.message, checkpointer=saver)
+        agent = build_agent(model, java, authenticated, request.message, checkpointer=saver,
+                            conversation_id=request.conversationId, run_id=request.runId)
         result = agent.invoke({"messages": [{"role": "user", "content": request.message}]},
                               config={"configurable": {"thread_id": request.conversationId}})
         content = result["messages"][-1].content

@@ -8,10 +8,12 @@ class JavaUnavailable(RuntimeError):
 
 
 class JavaClient:
-    def __init__(self, base_url: str, delegation_token: str, client: httpx.Client | None = None):
+    def __init__(self, base_url: str, delegation_token: str, client: httpx.Client | None = None,
+                 service_secret: str | None = None):
         self.base_url = base_url.rstrip("/")
         self.delegation_token = delegation_token
         self.client = client or httpx.Client(timeout=5.0)
+        self.service_secret = service_secret or ""
 
     def _get(self, path: str, params: dict | None = None):
         try:
@@ -66,6 +68,28 @@ class JavaClient:
                  "title": row["title"], "effectiveFrom": row["effectiveFrom"],
                  "category": row["category"], "excerpt": row["excerpt"]}
                 for row in rows[:5]]
+
+    def create_ticket(self, conversation_id: str, reason: str, order_id: int | None,
+                      idempotency_key: str) -> dict:
+        try:
+            response = self.client.post(
+                self.base_url + "/internal/customer/tickets",
+                headers={"Authorization": "Bearer " + self.delegation_token,
+                         "X-Agent-Service-Secret": self.service_secret},
+                json={"conversationId": conversation_id, "reason": reason, "summary": reason,
+                      "orderId": order_id, "idempotencyKey": idempotency_key},
+            )
+        except httpx.RequestError as exc:
+            raise JavaUnavailable("人工工单服务暂时不可用，请稍后重试") from exc
+        if response.status_code in (401, 403):
+            raise PermissionError("当前会话无权创建人工工单")
+        if response.status_code >= 500:
+            raise JavaUnavailable("人工工单服务暂时不可用，请稍后重试")
+        response.raise_for_status()
+        row = response.json()
+        if not row.get("ticketId") or row.get("status") != "QUEUED":
+            raise JavaUnavailable("人工工单服务未确认建单成功")
+        return {"ticketId": row["ticketId"], "status": row["status"]}
 
     @staticmethod
     def _item(row: dict) -> ItemCard:
