@@ -88,7 +88,15 @@ MySQL 保存 `cs_conversation`、`cs_message`、`cs_event`、`cs_ticket`、`cs_p
 - 默认屏蔽地址、手机号、支付凭据等不必要字段；日志和执行轨迹脱敏。内部服务调用加身份校验与网络隔离。
 - 第一期开通的工具均为只读，唯一写操作是创建工单。Agent 无法调用现有支付、扣库存、商品管理或任意 SQL 接口。
 
-## 8. 分阶段交付与验收
+## 8. 商城前端接入
+
+仓库新增 `frontend/html/hmall-portal` 静态商城门户及 Nginx 配置。门户使用 Vue 2、Axios 和传统 HTML 页面；不引入新的前端构建链。第一期增加独立的 `customer-service.html` 与少量专用 CSS/JavaScript，并将共享顶部导航 `js/top.js` 中的“客户服务”改为可访问入口。商品搜索页和订单支付页可带商品 ID 或订单 ID 跳转客服页，但页面参数仅用于预填问题，不能替代后端归属校验。管理后台页面不作为第一期人工接待台；人工工单先以服务端记录和最小状态接口交付。
+
+门户已有 `js/common.js`：普通 Axios 请求走 `/api`，登录 token 存在 `sessionStorage`，默认超时为 2 秒。客服消息采用快速返回 `runId` 的异步提交；事件流使用带 `Authorization` 请求头的 `fetch` 流读取，不直接使用无法附加该请求头的原生 `EventSource`。匿名会话使用服务端签发的安全会话凭证。客服页面处理流中断、重连、继续读取、登录跳转和历史消息恢复；不在前端保存订单敏感详情的长期副本。
+
+`frontend/conf/nginx.conf` 当前把 `/api` 路径转发到 8080 并移除此前缀。当前单体阶段，Spring Boot 对应映射为 `/customer-service/...`；未来微服务阶段由网关保留相同外部 `/api/customer-service/...` 契约。事件流代理配置需关闭响应缓冲并设置适当读超时，避免流式回复被 Nginx 聚合或提前切断。现有商城静态页面有部分尚未实现的后端调用；客服功能验收不依赖这些页面的其他缺口。
+
+## 9. 分阶段交付与验收
 
 ### 第一阶段：服务骨架与可信查询
 
@@ -104,13 +112,13 @@ MySQL 保存 `cs_conversation`、`cs_message`、`cs_event`、`cs_ticket`、`cs_p
 
 验收门槛：跨用户订单与会话访问测试必须全部拒绝；在预设测试集中，商品和订单事实均来自工具返回值，规则答复带可定位的已发布政策来源；无物流轨迹时不编造运输节点；工单成功与失败状态准确；断线后事件可续读，重启后历史会话可查询。性能目标在接入实际模型、数据和部署环境后通过基线测试确定，不在设计阶段臆定数值。
 
-## 9. 第二期候选能力
+## 10. 第二期候选能力
 
 在第一期稳定后，再评估退换货申请、取消订单、退款、地址修改、优惠券推荐和实时物流轨迹。这些能力需要新增对应 Java 业务流程、规则校验、用户确认、幂等和审计；不能只靠扩充提示词开通。
 
-## 10. 依据
+## 11. 依据
 
-- 本地仓库：`D:/code/hmall`，主分支提交 `adbd64f`；参考项目：`D:/code/deepsearch-agents`。
+- 本地仓库：`D:/code/hmall`，前端提交 `707f1c5`；参考项目：`D:/code/deepsearch-agents`。
 - Zendesk 零售客服能力：<https://www.zendesk.com/industries/retail/>。
 - Zendesk 客服用例分类：<https://support.zendesk.com/hc/en-us/articles/9041901679130-Creating-use-cases-for-AI-agents-to-identify-what-customers-are-asking-about>。
 - DeepAgents Python 架构：<https://docs.langchain.com/oss/python/deepagents/overview>。
