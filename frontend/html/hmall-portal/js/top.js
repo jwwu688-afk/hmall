@@ -27,7 +27,7 @@ const topApp = {
           <li class="f-item space"></li>
           <li class="f-item">关注黑马</li>
           <li class="f-item space"></li>
-          <li class="f-item">客户服务</li>
+          <li class="f-item"><a href="/customer-service.html">客户服务</a></li>
           <li class="f-item space"></li>
           <li class="f-item">网站导航</li>
         </ul>
