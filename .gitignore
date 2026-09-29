@@ -6,4 +6,4 @@ logs/
 # Local credentials and signing key
 **/src/main/resources/application-dev.yaml
 **/src/main/resources/application-local.yaml
-hm-service/src/main/resources/hmall.jks
+**/src/main/resources/*.jks
