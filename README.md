@@ -36,3 +36,5 @@ Java 服务除原有变量外还需要 `HM_AGENT_TOKEN_SECRET`（不少于 32 �
 数据库已纳入 Flyway 迁移：对已有商城表采用版本 0 基线，启动时执行 `hm-service/src/main/resources/db/migration/` 下的客服表迁移。迁移前请备份数据库。Python 的 SQLite 检查点目录需要持久化。启动顺序为 MySQL、Java 服务、Python 服务、Nginx。Nginx 对客服事件流关闭代理缓冲，网页通过事件 ID 在断线后续读。
 
 第一期还支持已发布政策的来源展示和排队人工工单；工单只有持久化后才显示编号。客服不执行支付、取消、退款或地址修改。真实商城规则需由负责人审核后发布，仓库不内置示例政策。
+
+接手开发或迁入微服务项目前，请先阅读 [智能客服 Agent 交接文档](docs/handoffs/2026-09-29-customer-agent-handoff.md)，其中区分了已完成代码、待联调事项和后续建设任务。
