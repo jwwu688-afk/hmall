@@ -13,7 +13,7 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.*;
 
 @SpringBootTest
-@ActiveProfiles("dev")
+@ActiveProfiles("test")
 @Transactional
 class CustomerConversationIntegrationTest {
     @Autowired CustomerConversationService conversations;

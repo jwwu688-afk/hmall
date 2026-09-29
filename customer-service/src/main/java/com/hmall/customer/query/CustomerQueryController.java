@@ -1,5 +1,8 @@
 package com.hmall.customer.query;
 
+import com.hmall.api.dto.customer.CustomerItemDTO;
+import com.hmall.api.dto.customer.CustomerLogisticsDTO;
+import com.hmall.api.dto.customer.CustomerOrderDTO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;

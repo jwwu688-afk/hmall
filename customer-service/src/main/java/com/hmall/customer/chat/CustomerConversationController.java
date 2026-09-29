@@ -1,7 +1,6 @@
 package com.hmall.customer.chat;
 
 import com.hmall.customer.query.CustomerDelegationTokenService;
-import com.hmall.utils.JwtTool;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -23,17 +22,14 @@ import java.util.concurrent.CompletableFuture;
 public class CustomerConversationController {
     private final CustomerConversationService conversations;
     private final CustomerDelegationTokenService delegationTokens;
-    private final JwtTool jwtTool;
+    private final CustomerIdentityService identities;
     private final AgentClient agentClient;
 
     @org.springframework.beans.factory.annotation.Value("${hm.agent.service-secret}")
     private String serviceSecret;
 
     private CustomerActor actor(String authorization, String guestKey) {
-        if (authorization != null && !authorization.isBlank()) {
-            return new CustomerActor(jwtTool.parseToken(authorization), null);
-        }
-        return new CustomerActor(null, guestKey);
+        return identities.actor(authorization, guestKey);
     }
 
     @PostMapping("/customer-service/conversations")

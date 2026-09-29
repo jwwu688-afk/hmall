@@ -1,8 +1,8 @@
 package com.hmall.customer.ticket;
 
 import com.hmall.customer.chat.CustomerActor;
+import com.hmall.customer.chat.CustomerIdentityService;
 import com.hmall.customer.query.CustomerDelegationTokenService;
-import com.hmall.utils.JwtTool;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
@@ -18,15 +18,13 @@ import java.util.Map;
 public class CustomerTicketController {
     private final CustomerTicketService tickets;
     private final CustomerDelegationTokenService delegationTokens;
-    private final JwtTool jwtTool;
+    private final CustomerIdentityService identities;
 
     @Value("${hm.agent.service-secret}")
     private String serviceSecret;
 
     private CustomerActor actor(String authorization, String guestKey) {
-        if (authorization != null && !authorization.isBlank())
-            return new CustomerActor(jwtTool.parseToken(authorization), null);
-        return new CustomerActor(null, guestKey);
+        return identities.actor(authorization, guestKey);
     }
 
     @PostMapping("/customer-service/conversations/{id}/handoff")
