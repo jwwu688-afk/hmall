@@ -80,6 +80,25 @@ def test_source_and_ticket_events_precede_completed_answer(monkeypatch):
         (1, "sources"), (2, "ticket"), (3, "completed")]
 
 
+def test_model_unavailable_emits_recoverable_error(monkeypatch):
+    import asyncio
+    import app.main as main
+
+    async def fake_to_thread(function, request):
+        raise main.ModelUnavailable("尚未配置客服模型")
+
+    sent = []
+
+    async def fake_callback(request, sequence, event_type, data):
+        sent.append((sequence, event_type, data))
+
+    monkeypatch.setattr(main.asyncio, "to_thread", fake_to_thread)
+    monkeypatch.setattr(main, "_callback", fake_callback)
+    asyncio.run(main.process_run(RunRequest(conversationId="conv-1", runId="run-1",
+                                           message="查询商品", delegationToken="signed")))
+    assert sent == [(1, "error", "客服模型暂时不可用，请稍后重试或转人工")]
+
+
 def test_signed_token_must_bind_to_requested_conversation_and_run(monkeypatch):
     from app.main import require_request_binding
     monkeypatch.setenv("HM_AGENT_TOKEN_SECRET", "local-test-secret-with-adequate-length")

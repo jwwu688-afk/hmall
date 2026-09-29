@@ -9,18 +9,27 @@ class JavaUnavailable(RuntimeError):
 
 class JavaClient:
     def __init__(self, base_url: str, delegation_token: str, client: httpx.Client | None = None,
-                 service_secret: str | None = None):
+                 service_secret: str | None = None, correlation_id: str | None = None):
         self.base_url = base_url.rstrip("/")
         self.delegation_token = delegation_token
-        self.client = client or httpx.Client(timeout=5.0)
+        self.client = client or httpx.Client(timeout=httpx.Timeout(5.0, connect=2.0))
         self.service_secret = service_secret or ""
+        self.correlation_id = correlation_id or ""
+
+    def _headers(self, include_service_secret: bool = False) -> dict[str, str]:
+        headers = {"Authorization": "Bearer " + self.delegation_token}
+        if self.correlation_id:
+            headers["X-Correlation-ID"] = self.correlation_id
+        if include_service_secret:
+            headers["X-Agent-Service-Secret"] = self.service_secret
+        return headers
 
     def _get(self, path: str, params: dict | None = None):
         try:
             response = self.client.get(
                 self.base_url + "/internal/customer" + path,
                 params=params,
-                headers={"Authorization": "Bearer " + self.delegation_token},
+                headers=self._headers(),
             )
         except httpx.RequestError as exc:
             raise JavaUnavailable("商城查询服务暂时不可用，请稍后重试") from exc
@@ -74,8 +83,7 @@ class JavaClient:
         try:
             response = self.client.post(
                 self.base_url + "/internal/customer/tickets",
-                headers={"Authorization": "Bearer " + self.delegation_token,
-                         "X-Agent-Service-Secret": self.service_secret},
+                headers=self._headers(include_service_secret=True),
                 json={"conversationId": conversation_id, "reason": reason, "summary": reason,
                       "orderId": order_id, "idempotencyKey": idempotency_key},
             )

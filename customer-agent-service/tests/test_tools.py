@@ -20,6 +20,20 @@ def test_catalog_request_uses_signed_token_and_bounded_filters():
     assert seen["request"].url.params["pageSize"] == "20"
 
 
+def test_java_request_propagates_correlation_id():
+    seen = {}
+
+    def handler(request):
+        seen["correlation_id"] = request.headers.get("x-correlation-id")
+        return httpx.Response(200, json=[])
+
+    client = JavaClient("http://java", "token",
+                        httpx.Client(transport=httpx.MockTransport(handler)),
+                        correlation_id="run-42")
+    client.list_my_orders()
+    assert seen["correlation_id"] == "run-42"
+
+
 def test_guest_order_call_returns_unauthorized():
     client = JavaClient("http://java", "guest-token", httpx.Client(
         transport=httpx.MockTransport(lambda _: httpx.Response(401))))

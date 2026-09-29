@@ -24,6 +24,10 @@ load_dotenv(Path(__file__).parents[1] / ".env.local")
 app = FastAPI(title="黑马商城客服 Agent", docs_url=None, redoc_url=None)
 
 
+class ModelUnavailable(RuntimeError):
+    """模型未配置或暂时不可用，调用方可以安全重试或转人工。"""
+
+
 class RunRequest(BaseModel):
     conversationId: str = Field(min_length=1, max_length=36)
     runId: str = Field(min_length=1, max_length=36)
@@ -47,7 +51,7 @@ async def run_request(request: RunRequest, background: BackgroundTasks,
 
 
 async def _callback(request: RunRequest, sequence: int, event_type: str, data: str):
-    url = os.environ.get("HM_JAVA_BASE_URL", "http://127.0.0.1:8080").rstrip("/")
+    url = os.environ.get("HM_JAVA_BASE_URL", "http://127.0.0.1:8087").rstrip("/")
     secret = os.environ.get("HM_AGENT_SERVICE_SECRET", "")
     payload = {"runId": request.runId, "sequence": sequence, "type": event_type, "data": data}
     async with httpx.AsyncClient(timeout=5.0) as client:
@@ -55,7 +59,8 @@ async def _callback(request: RunRequest, sequence: int, event_type: str, data: s
             try:
                 response = await client.post(
                     f"{url}/internal/customer-service/runs/{request.runId}/events",
-                    headers={"X-Agent-Callback-Secret": secret}, json=payload)
+                    headers={"X-Agent-Callback-Secret": secret,
+                             "X-Correlation-ID": request.runId}, json=payload)
                 response.raise_for_status()
                 return
             except httpx.HTTPError:
@@ -69,14 +74,15 @@ def _invoke(request: RunRequest) -> dict:
     model_name = os.environ.get("HM_AGENT_MODEL", "")
     api_key = os.environ.get("HM_AGENT_MODEL_API_KEY", "")
     if not model_name or not api_key:
-        raise RuntimeError("尚未配置客服模型")
+        raise ModelUnavailable("尚未配置客服模型")
     model = ChatOpenAI(model=model_name, api_key=api_key,
                        base_url=os.environ.get("HM_AGENT_MODEL_BASE_URL") or None,
                        temperature=0.1)
     authenticated = "order:read" in scopes
-    java = JavaClient(os.environ.get("HM_JAVA_BASE_URL", "http://127.0.0.1:8080"),
+    java = JavaClient(os.environ.get("HM_JAVA_BASE_URL", "http://127.0.0.1:8087"),
                       request.delegationToken,
-                      service_secret=os.environ.get("HM_AGENT_SERVICE_SECRET", ""))
+                      service_secret=os.environ.get("HM_AGENT_SERVICE_SECRET", ""),
+                      correlation_id=request.runId)
     checkpoint_path = Path(os.environ.get("HM_AGENT_CHECKPOINT_DB", "data/customer-agent-checkpoints.sqlite3"))
     checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
     source_states: list[dict] = []
@@ -190,5 +196,7 @@ async def process_run(request: RunRequest):
             await _callback(request, sequence, "ticket", json.dumps(result["ticket"], ensure_ascii=False))
             sequence += 1
         await _callback(request, sequence, "completed", result["answer"])
+    except ModelUnavailable:
+        await _callback(request, sequence, "error", "客服模型暂时不可用，请稍后重试或转人工")
     except Exception:
         await _callback(request, sequence, "error", "客服服务暂时不可用，请稍后重试或转人工")
