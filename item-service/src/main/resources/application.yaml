@@ -42,3 +42,6 @@ knife4j:
         api-rule: package
         api-rule-resources:
           - com.hmall.item.controller
+hm:
+  internal:
+    service-secret: ${HM_INTERNAL_SERVICE_SECRET:}
