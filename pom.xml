@@ -17,6 +17,7 @@
         <module>hm-api</module>
         <module>trade-service</module>
         <module>pay-service</module>
+        <module>customer-service</module>
     </modules>
 
     <parent>
@@ -29,6 +30,7 @@
     <properties>
         <maven.compiler.source>11</maven.compiler.source>
         <maven.compiler.target>11</maven.compiler.target>
+        <maven.compiler.release>11</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
         <org.projectlombok.version>1.18.20</org.projectlombok.version>

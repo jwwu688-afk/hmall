@@ -46,6 +46,8 @@ feign:
   okhttp:
     enabled: true
 hm:
+  internal:
+    service-secret: ${HM_INTERNAL_SERVICE_SECRET:}
   jwt:
     location: classpath:hmall.jks
     alias: hmall

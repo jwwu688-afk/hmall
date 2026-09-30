@@ -7,6 +7,7 @@ import com.hmall.common.exception.DbException;
 import com.hmall.common.utils.WebUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.validation.ObjectError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -54,6 +55,11 @@ public class CommonExceptionAdvice {
         log.error("参数异常 -> NestedServletException，{}", e.getMessage());
         log.debug("", e);
         return processResponse(new BadRequestException("请求参数处理异常"));
+    }
+
+    @ExceptionHandler(ResponseStatusException.class)
+    public ResponseEntity<R<Void>> handleResponseStatusException(ResponseStatusException e) {
+        return ResponseEntity.status(e.getRawStatusCode()).body(R.error(e.getRawStatusCode(), e.getReason()));
     }
 
     @ExceptionHandler(Exception.class)

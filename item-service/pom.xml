@@ -11,17 +11,16 @@
 
     <artifactId>item-service</artifactId>
 
-    <properties>
-        <maven.compiler.source>17</maven.compiler.source>
-        <maven.compiler.target>17</maven.compiler.target>
-        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    </properties>
-
     <dependencies>
         <!--common-->
         <dependency>
             <groupId>com.heima</groupId>
             <artifactId>hm-common</artifactId>
+            <version>1.0.0</version>
+        </dependency>
+        <dependency>
+            <groupId>com.heima</groupId>
+            <artifactId>hm-api</artifactId>
             <version>1.0.0</version>
         </dependency>
         <!--web-->

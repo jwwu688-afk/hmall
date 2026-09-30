@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>智能客服 · 黑马商城</title>
+  <link rel="stylesheet" href="css/customer-service.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="site-header-inner">
+      <a class="brand" href="/">黑马商城</a>
+      <nav aria-label="主导航"><a href="/">商城首页</a><a href="/cart.html">购物车</a><a href="/customer-service.html" aria-current="page">智能客服</a></nav>
+    </div>
+  </header>
+  <main class="layout">
+    <section class="intro" aria-labelledby="page-title">
+      <span class="eyebrow">黑马商城 · 智能客服</span>
+      <h1 id="page-title">有什么可以帮你？</h1>
+      <p>可以咨询在售商品、本人订单、已有物流信息和已发布规则。需要进一步处理时可提交排队人工工单。</p>
+      <div class="suggestions">
+        <button type="button" data-question="帮我看看有什么在售的商品">查询商品</button>
+        <button type="button" data-question="查询我的最近订单">我的订单</button>
+        <button type="button" data-question="查询我的订单物流">物流进度</button>
+        <button id="handoff-button" type="button">转人工（排队工单）</button>
+      </div>
+    </section>
+    <section class="chat" aria-label="客服对话">
+      <div class="chat-heading"><div><span class="online-dot"></span><strong>黑马智能客服</strong><small>咨询与查询</small></div><span id="connection-status" role="status">正在连接</span></div>
+      <div id="messages" class="messages" role="log" aria-live="polite" aria-relevant="additions text"></div>
+      <div id="ticket-panel" class="ticket-panel" hidden></div>
+      <div id="notice" class="notice" role="alert" hidden></div>
+      <form id="message-form" class="composer">
+        <label for="question" class="sr-only">输入问题</label>
+        <textarea id="question" rows="2" maxlength="2000" placeholder="请输入商品、订单或物流问题…" required></textarea>
+        <div class="composer-actions"><span>客服答复以商城实际数据为准</span><button id="send-button" type="submit">发送问题 <span aria-hidden="true">↗</span></button></div>
+      </form>
+    </section>
+  </main>
+  <script src="js/customer-service.js" defer></script>
+</body>
+</html>

@@ -45,3 +45,6 @@ knife4j:
 feign:
   okhttp:
     enabled: true
+hm:
+  internal:
+    service-secret: ${HM_INTERNAL_SERVICE_SECRET:}
