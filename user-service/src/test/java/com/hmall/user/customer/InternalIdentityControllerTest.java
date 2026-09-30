@@ -33,6 +33,12 @@ class InternalIdentityControllerTest {
     }
 
     @Test
+    void resolvesLegacyRawAuthorizationTokenUsedByStorefront() {
+        String token = tokens.createToken(43L, Duration.ofMinutes(5));
+        assertThat(controller.identity("secret", token).getUserId()).isEqualTo(43L);
+    }
+
+    @Test
     void rejectsInvalidUserTokenAndMissingInternalSecret() {
         assertThatThrownBy(() -> controller.identity("secret", "Bearer invalid"))
                 .isInstanceOf(UnauthorizedException.class);

@@ -1,40 +1,47 @@
-# 黑马商城（hmall）
+# 黑马商城微服务与智能客服
 
-Java 11 / Spring Boot 2.7.12 / MyBatis-Plus 的商城示例项目。当前是单体应用，Maven 模块包括公共代码 `hm-common` 和可运行应用 `hm-service`。`frontend` 目录保存三个静态站点及 Nginx 配置。
+本仓库是 Java 11 / Spring Boot 2.7.12 的黑马商城示例项目。商城业务已拆为五个服务，并新增独立 Java `customer-service` 与 Python `customer-agent-service`。根 Maven reactor 仍保留原 `hm-service`，用于兼容和对照；客服生产调用链不再依赖它。
 
-## 本地运行
+## 模块与端口
 
-1. 准备 MySQL 数据库 `hmall` 及相应表结构。此仓库没有包含建表脚本。
-2. 设置环境变量 `HM_DB_HOST`（默认 `localhost`）、`HM_DB_PASSWORD` 和 `HM_JWT_PASSWORD`。
-3. 在 `hm-service/src/main/resources/` 下生成自己的 `hmall.jks`，别将私钥提交到仓库。例如在仓库根目录运行：
+| 模块 | 端口 | 数据库 | 职责 |
+| --- | ---: | --- | --- |
+| `item-service` | 8081 | `hm-item` | 商品 |
+| `cart-service` | 8082 | `hm-cart` | 购物车 |
+| `user-service` | 8084 | `hm-user` | 用户、登录与 JWT 身份解析 |
+| `trade-service` | 8085 | `hm-trade` | 订单与物流字段 |
+| `pay-service` | 8086 | `hm-pay` | 支付 |
+| `customer-service` | 8087 | `hm-customer` | 客服会话、事件、政策、工单与 Agent 编排 |
+| `customer-agent-service` | 8001 | SQLite 检查点 | DeepAgents 与受限工具 |
 
-   ```sh
-   keytool -genkeypair -alias hmall -keyalg RSA -keysize 2048 -validity 3650 -keystore hm-service/src/main/resources/hmall.jks
-   ```
+服务通过 Nacos（默认 `localhost:8848`）发现。`customer-service` 只通过 Feign 访问商品、交易和用户服务，不读取这些服务的数据库；Python Agent 只调用 `customer-service` 的 `/internal/customer/**`，不直连商城数据库。
 
-   将密钥库密码和密钥密码设为相同值，并用该值设置 `HM_JWT_PASSWORD`。
-4. 执行 `mvn -pl hm-service -am package -DskipTests`，然后运行 `java -jar hm-service/target/hm-service.jar`。应用默认监听 `8080` 端口。
+## 本地准备与启动
 
-`application-dev.yaml`、`application-local.yaml` 和 `hmall.jks` 是本地文件，已被 Git 忽略。已有本地环境可以继续使用这些文件；公开仓库只保留不含凭据的 `application.yaml`。
+1. 准备 Nacos、MySQL，以及 `hm-item`、`hm-cart`、`hm-user`、`hm-trade`、`hm-pay`、`hm-customer` 数据库。五个业务库使用原项目拆分后的表结构；`hm-customer` 由 `customer-service/src/main/resources/db/migration/` 中的 Flyway V1～V3 创建客服表。迁移前先备份数据库。
+2. 用环境变量或被 Git 忽略的本地配置提供数据库口令。`customer-service` 使用 `HM_DB_HOST`、`HM_DB_USERNAME`、`HM_DB_PASSWORD`；其他服务沿用各模块的 `hm.db.host`、`hm.db.pw` 配置。
+3. 为 `user-service` 准备本地 `user-service/src/main/resources/hmall.jks`，并设置 `HM_JWT_PASSWORD`。密钥库、`application-dev.yaml`、`application-local.yaml` 和 `.env.local` 均被 Git 忽略，禁止提交。
+4. 所有访问内部客服端点的 Java 服务设置相同的 `HM_INTERNAL_SERVICE_SECRET`。`customer-service` 与 Python Agent 还需共享 `HM_AGENT_TOKEN_SECRET`（至少 32 字符）和 `HM_AGENT_SERVICE_SECRET`；Java 使用 `HM_AGENT_URL`（默认 `http://127.0.0.1:8001`），并可用 `HM_AGENT_CONNECT_TIMEOUT`、`HM_AGENT_READ_TIMEOUT` 调整 Agent HTTP 连接/读取超时（默认 2 秒/5 秒）。
+5. 按 Nacos/MySQL → 五个业务服务 → `customer-service` → Python Agent → Nginx 的顺序启动。Python 模型与检查点配置见 [Agent 服务说明](customer-agent-service/README.md)。
 
-## 主要功能
+构建与测试：
 
-商品查询与管理、搜索、购物车、订单、余额支付、用户登录和收货地址查询。接口文档入口为 `/doc.html`。
+```powershell
+mvn clean test
+mvn -DskipTests package
+Set-Location customer-agent-service
+python -m pip install -e ".[test]"
+python -m pytest tests -q
+```
 
 ## 前端
 
-将 `frontend/html` 和 `frontend/conf` 中的文件分别放进 Nginx 安装目录的 `html`、`conf` 目录，启动 Nginx。商城门户使用 `http://localhost:18080/`，管理页面使用 `http://localhost:18081/` 和 `http://localhost:18082/`。配置中的 `/api` 会转发到 `http://localhost:8080`，因此需要先启动后端。
-
-前端是原项目的静态 HTML、CSS 和 JavaScript，不需要 npm 构建。部分页面调用了当前单体后端尚未提供的接口，例如搜索建议及管理权限相关接口；这些页面的相应功能需要后续后端实现。
+`frontend` 是静态 HTML/CSS/JavaScript，无 npm 构建步骤。将 `frontend/html` 与 `frontend/conf` 放入 Nginx 对应目录后，商城门户默认监听 `http://localhost:18080/`。通用 `/api` 仍代理到兼容后端 8080，客服路径优先代理到 `customer-service:8087`。
 
 ## 智能客服（第一期）
 
-商城门户新增 `/customer-service.html`，支持在售商品、本人订单和现有物流信息咨询。架构上，`hm-service` 管理登录身份、业务查询、会话及事件，独立的 `customer-agent-service` 使用 DeepAgents 调度只读工具。两者通过有限权限内部令牌通信；客服不会直接连接商城数据库。
+商城门户 `/customer-service.html` 支持游客商品与公开规则咨询，以及登录用户的本人订单、现有物流信息和排队人工工单。外部地址保持 `/api/customer-service/**`；Nginx 将它单独代理到 8087，并为 SSE 关闭缓冲、保留 `after` 事件游标。
 
-Java 服务除原有变量外还需要 `HM_AGENT_TOKEN_SECRET`（不少于 32 个字符）、`HM_AGENT_SERVICE_SECRET` 和 `HM_AGENT_URL`（默认 `http://127.0.0.1:8001`）。本地可在被 Git 忽略的 `hm-service/src/main/resources/application-dev.yaml` 中设置 `hm.agent.token-secret` 与 `hm.agent.service-secret`。Python 使用被 Git 忽略的 `customer-agent-service/.env.local`，配置方式见 [Python 客服服务说明](customer-agent-service/README.md)。两端的令牌密钥和服务密钥必须一致。
+Agent 仅装配商品、本人订单/物流、已发布政策和创建工单工具，不开放任意 HTTP、SQL、文件、支付、退款、取消订单或地址修改。订单归属在 `trade-service` 再校验；工单只有在 Java 返回持久化编号和 `QUEUED` 后才显示成功。模型缺失或失败会产生可重试错误事件，不会伪造工具结果。
 
-数据库已纳入 Flyway 迁移：对已有商城表采用版本 0 基线，启动时执行 `hm-service/src/main/resources/db/migration/` 下的客服表迁移。迁移前请备份数据库。Python 的 SQLite 检查点目录需要持久化。启动顺序为 MySQL、Java 服务、Python 服务、Nginx。Nginx 对客服事件流关闭代理缓冲，网页通过事件 ID 在断线后续读。
-
-第一期还支持已发布政策的来源展示和排队人工工单；工单只有持久化后才显示编号。客服不执行支付、取消、退款或地址修改。真实商城规则需由负责人审核后发布，仓库不内置示例政策。
-
-接手开发或迁入微服务项目前，请先阅读 [智能客服 Agent 交接文档](docs/handoffs/2026-09-29-customer-agent-handoff.md)，其中区分了已完成代码、待联调事项和后续建设任务。
+当前自动化验证结果及尚未完成的真实模型/部署验收见 [第一版验证记录](docs/testing/customer-agent-v1-verification.md)。开发交接与后续优先级见 [Agent 交接文档](docs/handoffs/2026-09-29-customer-agent-handoff.md)。

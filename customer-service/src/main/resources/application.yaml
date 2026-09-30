@@ -23,6 +23,8 @@ hm:
     token-secret: ${HM_AGENT_TOKEN_SECRET}
     service-secret: ${HM_AGENT_SERVICE_SECRET}
     url: ${HM_AGENT_URL:http://127.0.0.1:8001}
+    connect-timeout: ${HM_AGENT_CONNECT_TIMEOUT:2s}
+    read-timeout: ${HM_AGENT_READ_TIMEOUT:5s}
 
 feign:
   okhttp:

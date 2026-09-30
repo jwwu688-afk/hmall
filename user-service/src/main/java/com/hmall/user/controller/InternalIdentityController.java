@@ -22,10 +22,13 @@ public class InternalIdentityController {
             @RequestHeader(value = "X-Internal-Service-Secret", required = false) String serviceSecret,
             @RequestHeader(value = "Authorization", required = false) String authorization) {
         guard.verify(serviceSecret);
-        if (authorization == null || !authorization.startsWith("Bearer ")) {
+        if (authorization == null || authorization.isBlank()) {
             throw new UnauthorizedException("未登录");
         }
-        String token = authorization.substring("Bearer ".length()).trim();
+        String token = authorization.trim();
+        if (token.regionMatches(true, 0, "Bearer ", 0, "Bearer ".length())) {
+            token = token.substring("Bearer ".length()).trim();
+        }
         if (token.isEmpty()) {
             throw new UnauthorizedException("未登录");
         }

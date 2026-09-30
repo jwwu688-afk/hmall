@@ -1,28 +1,26 @@
 # 黑马商城智能客服 Agent 交接文档
 
-更新日期：2026-09-29
+更新日期：2026-09-30
 
-交接分支：[`codex/customer-agent`](https://github.com/jwwu688-afk/hmall/tree/codex/customer-agent)
+交接分支：[`main`](https://github.com/jwwu688-afk/hmall/tree/main)
 
-当前代码提交：`31b3882`（本文新增后以分支最新提交为准）
+当前代码提交：以分支最新提交为准。
 
 ## 1. 一句话现状
 
-第一期的**代码能力已实现并通过自动化测试**：商城买家可以使用客服页面咨询在售商品、本人订单和已有物流字段，检索已发布政策，并创建排队人工工单。Java 负责身份、业务数据、会话和工单；独立 Python DeepAgents 服务负责选择受限工具。**尚未完成真实模型与生产环境的端到端验收**，因此当前应视为可联调版本，不应直接宣布上线。
-
-当前 Java 项目仍是 `hm-service` 单体；Python Agent 已独立为服务。以后迁入微服务项目时，应迁移接口契约和业务代码，不能把整个 `.worktrees` 目录当模块复制。
+第一期的**代码能力已实现并通过离线自动化测试**：商城买家可以使用客服页面咨询在售商品、本人订单和已有物流字段，检索已发布政策，并创建排队人工工单。独立 Java `customer-service` 负责会话、政策、工单和编排；五个业务微服务继续拥有领域数据；Python DeepAgents 只选择受限工具。**尚未完成真实模型与生产环境的端到端验收**，因此当前是可部署联调版，不应直接宣布上线。
 
 ## 2. 已完成的功能与位置
 
 | 能力 | 当前实现 | 主要位置 |
 | --- | --- | --- |
-| 受控业务查询 | 仅查询在售商品、当前登录用户的订单与已有物流公司、单号；他人订单和不存在订单使用相同的未找到结果 | `hm-service/src/main/java/com/hmall/customer/query/` |
-| 会话与事件 | 游客密钥或登录身份绑定会话，消息幂等，MySQL 持久化消息和事件，SSE 按事件 ID 续读，Agent 运行失败有错误事件 | `hm-service/src/main/java/com/hmall/customer/chat/` |
+| 受控业务查询 | 仅查询在售商品、当前登录用户的订单与已有物流公司、单号；他人订单和不存在订单使用相同的未找到结果 | `customer-service/.../customer/query/`、`item-service`、`trade-service`、`user-service` |
+| 会话与事件 | 游客密钥或登录身份绑定会话，消息幂等，MySQL 持久化消息和事件，SSE 按事件 ID 续读，Agent 运行失败有错误事件 | `customer-service/.../customer/chat/` |
 | DeepAgents | 商品、订单、政策、工单专用工具与子 Agent；内部委托令牌绑定会话和运行，游客不装配订单工具 | `customer-agent-service/app/` |
 | 有依据的答复 | 模型选择工具，对外文本由可信工具结果生成；政策答复显示已发布版本的 ID、标题、生效时间和原文片段；无可信结果时不转发模型自由文本 | `customer-agent-service/app/main.py`、`app/policy_tools.py` |
-| 人工工单 | 显式转人工创建 `QUEUED` 工单，按会话和幂等键去重，可关联已验证为本人所有的订单；工单摘要只保存咨询主题和关联订单号 | `hm-service/src/main/java/com/hmall/customer/ticket/`、`customer-agent-service/app/ticket_tools.py` |
+| 人工工单 | 显式转人工创建 `QUEUED` 工单，按会话和幂等键去重，可关联已验证为本人所有的订单；工单摘要只保存咨询主题和关联订单号 | `customer-service/.../customer/ticket/`、`customer-agent-service/app/ticket_tools.py` |
 | 商城页面 | `/customer-service.html`，支持历史恢复、断线重连、政策来源卡片、工单状态和游客登录引导 | `frontend/html/hmall-portal/customer-service.html`、`js/customer-service.js`、`css/customer-service.css` |
-| 数据迁移与部署材料 | Flyway V1 会话、V2 政策、V3 工单；Python Dockerfile、环境变量样例、评测样例与测试 | `hm-service/src/main/resources/db/migration/`、`customer-agent-service/` |
+| 数据迁移与部署材料 | Flyway V1 会话、V2 政策、V3 工单；Python Dockerfile、环境变量样例、评测样例与测试 | `customer-service/src/main/resources/db/migration/`、`customer-agent-service/` |
 
 边界：Agent 不执行支付、取消订单、退款、退换货申请或修改地址；不提供实时人工接待。现有物流数据没有运输轨迹和预计送达时间。
 
@@ -32,34 +30,37 @@
 商城页面 /api/customer-service/...
         │
         ▼
-Nginx → hm-service 客服入口（身份、会话、SSE、工单） → MySQL
+Nginx → customer-service:8087（会话、SSE、政策、工单） → hm-customer
+                    │                          │
+                    │ Feign + 内部服务密钥     ├→ item-service
+                    │                          ├→ trade-service
+                    │                          └→ user-service
                     │ 签发短时限域内部令牌
                     ▼
           customer-agent-service（DeepAgents、SQLite 检查点）
-                    │ 带令牌调用受控接口
-                    ▼
-          hm-service 商品 / 本人订单 / 物流 / 政策 / 工单接口
+                    │ 带令牌调用受控接口并回调
+                    └──────────────────────────► customer-service
 ```
 
 - 浏览器只访问 Java 对外接口；Python 的 `/internal/runs` 仅供 Java 调用，不应公开到互联网。
-- Java 用 `HM_AGENT_SERVICE_SECRET` 验证服务间请求，内部委托令牌用 `HM_AGENT_TOKEN_SECRET` 签名，并携带范围、主体、会话 ID、运行 ID 和有效期。订单归属最终由 Java 再次校验。
+- 业务服务用 `HM_INTERNAL_SERVICE_SECRET` 保护内部端点；Java/Python 用 `HM_AGENT_SERVICE_SECRET` 验证服务间请求，委托令牌用 `HM_AGENT_TOKEN_SECRET` 签名，并携带范围、主体、会话 ID、运行 ID 和有效期。订单归属最终由 `trade-service` 再次校验。
 - MySQL 保存 `customer_conversation`、`customer_message`、`customer_run`、`customer_event`、`customer_policy`、`customer_ticket`；Python 的 SQLite 文件保存 Agent 检查点。两类持久化都需要备份和持久卷规划。
-- Nginx 把 `/api` 转给 Java，并对客服 SSE 路径关闭缓冲；未来迁移到网关时应保持页面使用的 `/api/customer-service/...` 契约。
+- Nginx 将 `/api/customer-service/**` 优先转给 8087，并关闭缓冲、设置 300 秒读超时；页面使用的外部契约保持不变。
 
 ## 4. 接手人如何运行
 
-1. 获取 `codex/customer-agent` 分支。项目使用 Java 11、Maven、MySQL 和 Python 3.12。当前机器的 Java/Maven 与 Python 虚拟环境、缓存尽量放在 D 盘；这些本地工具目录没有提交到 Git。
-2. 准备已有商城业务表的 `hmall` 数据库并先备份。Flyway 采用版本 0 基线，仅补充客服 V1～V3 表；它**不创建原商城的全部业务表**。
-3. 为 Java 配置 `HM_DB_HOST`、`HM_DB_PASSWORD`、`HM_JWT_PASSWORD`、`HM_AGENT_TOKEN_SECRET`、`HM_AGENT_SERVICE_SECRET`、`HM_AGENT_URL`。按仓库 [README](../../README.md) 准备本地 `hmall.jks`；不要提交密钥库或含密码的 `application-dev.yaml`。
+1. 获取 `main` 分支。项目使用 Java 11、Maven、MySQL 和 Python 3.12。当前机器的 Java/Maven 与 Python 虚拟环境、缓存尽量放在 D 盘；这些本地工具目录没有提交到 Git。
+2. 准备 Nacos、五个业务数据库和 `hm-customer` 并先备份。客服 Flyway V1～V3 只创建客服表，不创建原商城业务表。
+3. 配置数据库连接和 `HM_INTERNAL_SERVICE_SECRET`；为 `user-service` 配置 `HM_JWT_PASSWORD` 及本地 `hmall.jks`；为客服 Java 配置 `HM_AGENT_TOKEN_SECRET`、`HM_AGENT_SERVICE_SECRET`、`HM_AGENT_URL`，并按环境需要调整 `HM_AGENT_CONNECT_TIMEOUT`、`HM_AGENT_READ_TIMEOUT`（默认 2 秒/5 秒）。不要提交密钥库或含密码的本地 profile。
 4. 参考 [Python 环境样例](../../customer-agent-service/.env.example) 创建被 Git 忽略的 `customer-agent-service/.env.local`，配置 `HM_AGENT_MODEL`、`HM_AGENT_MODEL_BASE_URL`、`HM_AGENT_MODEL_API_KEY`、`HM_JAVA_BASE_URL`、`HM_AGENT_CHECKPOINT_DB`，并使两项内部密钥与 Java 一致。不要把实际密钥发到聊天或提交到仓库。
-5. 启动顺序：MySQL → `hm-service` → Python Agent → Nginx。Java 默认 `8080`；Python 默认 `127.0.0.1:8001`；商城门户默认 `18080`。Python 健康检查为 `GET /health`，页面入口为 `/customer-service.html`。
+5. 启动顺序：Nacos/MySQL → 五个业务服务 → `customer-service` → Python Agent → Nginx。客服 Java 默认 `8087`；Python 默认 `127.0.0.1:8001`；商城门户默认 `18080`。
 
 常用命令（先按本机环境设置变量，并把依赖缓存放在 D 盘）：
 
 ```powershell
 # 仓库根目录
-mvn -pl hm-service -am test
-mvn -pl hm-service -am package -DskipTests
+mvn clean test
+mvn -DskipTests package
 Set-Location customer-agent-service
 # 使用 Python 3.12 虚拟环境
 python -m pip install -e ".[test]"
@@ -71,7 +72,7 @@ python -m uvicorn app.main:app --host 127.0.0.1 --port 8001
 
 ## 5. 已验证结果与未验证范围
 
-截至本次交接前的最后一次代码验证：Java 全量 **26 项通过**；Python 全量 **18 项通过**；前端脚本 `node --check`、`git diff --check` 和 DeepAgents 离线装配通过。MySQL 在本地环境成功执行 V1～V3 迁移。浏览器已验证客服页加载、排队工单创建与刷新恢复、游客订单登录引导、Agent 不可用时的错误提示。
+截至 2026-09-30：十模块 `mvn clean test` 成功，Java **38 项执行、0 失败、0 错误、1 项旧数据库写入场景跳过**；十模块打包成功；Python **20 项通过**；前端 3 项契约测试与 `node --check` 通过。详细证据见 [验证记录](../testing/customer-agent-v1-verification.md)。
 
 以下仍须在接手环境补验，不能将自动化测试视为它们的替代：
 
@@ -89,11 +90,11 @@ python -m uvicorn app.main:app --host 127.0.0.1 --port 8001
 2. **发布真实规则。** 明确规则负责人和发布流程，录入配送、支付、退换货政策的版本与生效时间；检查过期、冲突和空结果行为。
 3. **部署验证。** 在目标环境运行数据库备份与 Flyway 迁移、`nginx -t`、双服务重启、SSE 断线续读、工单重复提交、他人订单越权以及服务超时测试。补充日志、告警和备份恢复演练。
 
-### P1：迁入微服务项目
+### P1：完成微服务运维能力
 
-1. 先取得目标微服务项目的仓库路径与模块边界，确定网关、商品、订单、物流、客服分别由哪个服务拥有；保留页面 `/api/customer-service/...` 契约。
-2. 将 `customer-agent-service` 作为独立服务迁入；把当前 `hm-service/customer/query` 适配器拆到相应业务服务，保持 Agent 工具入参与返回字段稳定。内部调用要保留受限令牌、订单归属校验及服务认证。
-3. 为客服会话、政策、工单确定数据库所有权，规划 Flyway 迁移和历史数据迁移；设置服务发现、超时重试、幂等键、链路追踪和部署配置。完成契约测试及跨服务端到端测试后再切换流量。
+1. 引入统一网关与配置中心管理，同时保持页面 `/api/customer-service/...` 契约。
+2. 为 Feign 和 Agent 调用补齐指标、告警、链路追踪、限流、熔断与部署配置。
+3. 完成客服历史数据迁移、备份恢复演练及跨服务端到端测试后再切换生产流量。
 
 ### P2：完善客服运营能力
 
@@ -109,4 +110,4 @@ python -m uvicorn app.main:app --host 127.0.0.1 --port 8001
 
 - [设计文档](../superpowers/specs/2026-09-28-ecommerce-customer-agent-design.md) 和 [核心实施计划](../superpowers/plans/2026-09-28-ecommerce-agent-core.md)、[规则与工单计划](../superpowers/plans/2026-09-28-ecommerce-agent-policy-handoff.md) 记录了设计过程，部分措辞与最终实现不完全一致；**以当前代码、迁移脚本和本交接文档的实测状态为准**。
 - `application-dev.yaml`、`hmall.jks`、`.env.local`、本地 MySQL 数据和 D 盘工具链都被忽略或仅存在于开发机，克隆仓库后须在目标环境自行准备。
-- 合并到主分支、迁移到另一微服务仓库和生产部署均尚未执行；目前可供协作查看的是远端 `codex/customer-agent` 分支。
+- `hm-service` 仍在 reactor 中用于兼容原项目，但新客服调用链使用五个业务服务与独立 `customer-service`；不要再把客服代码迁回单体。

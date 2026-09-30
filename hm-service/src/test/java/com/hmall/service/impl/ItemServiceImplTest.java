@@ -1,36 +1,28 @@
 package com.hmall.service.impl;
 
-import com.hmall.domain.dto.OrderDetailDTO;
-import com.hmall.service.IItemService;
 import com.hmall.utils.JwtTool;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
 
+import java.security.KeyPairGenerator;
 import java.time.Duration;
-import java.util.List;
 
-@SpringBootTest
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
 class ItemServiceImplTest {
 
-    @Autowired
-    protected IItemService itemService;
-
-    @Autowired
-    private JwtTool jwtTool;
-
     @Test
-    void testJwt() {
+    void testJwt() throws Exception {
+        KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
+        generator.initialize(2048);
+        JwtTool jwtTool = new JwtTool(generator.generateKeyPair());
         String token = jwtTool.createToken(1L, Duration.ofMinutes(30));
-        System.out.println("token = " + token);
+        assertEquals(1L, jwtTool.parseToken(token));
     }
 
     @Test
+    @Disabled("manual integration test: requires a prepared MySQL inventory dataset")
     void deductStock() {
-        List<OrderDetailDTO> items = List.of(
-                new OrderDetailDTO().setItemId(317578L).setNum(1),
-                new OrderDetailDTO().setItemId(317580L).setNum(1)
-        );
-        itemService.deductStock(items);
+        // Intentionally kept as a named manual scenario; automated tests must not mutate shared inventory.
     }
 }
